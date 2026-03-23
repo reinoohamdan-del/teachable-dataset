@@ -3,19 +3,17 @@ import random
 from PIL import Image, ImageEnhance, ImageFilter
 import zipfile
 
-# Classes and input images
-images = {
-    "Ethan": "input_images/ethan.jpg",
-    "Suspect": "input_images/suspect.jpg",
-    "Ramirez": "input_images/ramirez.jpg"
-}
+input_root = "input_images"
+output_root = "dataset"
+
+classes = os.listdir(input_root)
 
 # Create folders
 for split in ["train", "test"]:
-    for cls in images:
-        os.makedirs(f"dataset/{split}/{cls}", exist_ok=True)
+    for cls in classes:
+        os.makedirs(f"{output_root}/{split}/{cls}", exist_ok=True)
 
-# ✅ Zoom function
+# Zoom function
 def zoom_image(img, zoom_factor):
     w, h = img.size
     new_w = int(w / zoom_factor)
@@ -29,10 +27,10 @@ def zoom_image(img, zoom_factor):
     cropped = img.crop((left, top, right, bottom))
     return cropped.resize((w, h))
 
-# Augmentation function
+# Augmentation
 def augment(img):
     choice = random.choice(["rotate", "bright", "contrast", "blur", "zoom"])
-    
+
     if choice == "rotate":
         return img.rotate(random.uniform(-10, 10))
     elif choice == "bright":
@@ -43,28 +41,36 @@ def augment(img):
         return img.filter(ImageFilter.GaussianBlur(1))
     elif choice == "zoom":
         return zoom_image(img, random.uniform(1.1, 1.4))
-    
+
     return img
 
-# Generate dataset
-for cls, path in images.items():
-    original = Image.open(path).convert("RGB")
+# Process all images
+for cls in classes:
+    class_path = os.path.join(input_root, cls)
+    images = [f for f in os.listdir(class_path) if f.endswith((".jpg", ".png", ".jpeg"))]
 
-    for i in range(20):
-        img = original.copy()
+    counter = 0
 
-        # Keep first image original
-        if i != 0:
-            img = augment(img)
+    for img_name in images:
+        path = os.path.join(class_path, img_name)
+        original = Image.open(path).convert("RGB")
 
-        folder = "train" if i < 16 else "test"
-        img.save(f"dataset/{folder}/{cls}/{cls.lower()}_{i}.jpg")
+        # Create multiple versions per image
+        for i in range(5):  # 5 augmentations per image
+            img = original.copy()
+            if i != 0:
+                img = augment(img)
+
+            split = "train" if random.random() < 0.8 else "test"
+            save_path = f"{output_root}/{split}/{cls}/{cls}_{counter}.jpg"
+            img.save(save_path)
+            counter += 1
 
 # Zip dataset
 with zipfile.ZipFile("dataset.zip", "w") as z:
-    for root, _, files in os.walk("dataset"):
+    for root, _, files in os.walk(output_root):
         for f in files:
             full = os.path.join(root, f)
-            z.write(full, os.path.relpath(full, "dataset"))
+            z.write(full, os.path.relpath(full, output_root))
 
-print("DONE: dataset.zip created with zoom augmentation")
+print("DONE: dataset.zip created with multiple images + zoom")
