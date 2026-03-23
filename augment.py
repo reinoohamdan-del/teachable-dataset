@@ -1,11 +1,21 @@
 import os
-from PIL import Image
+import random
+from PIL import Image, ImageEnhance, ImageFilter
+import zipfile
 
-input_folder = "input_images"
-output_folder = "augmented_images"
+# Classes and input images
+images = {
+    "Ethan": "input_images/ethan.jpg",
+    "Suspect": "input_images/suspect.jpg",
+    "Ramirez": "input_images/ramirez.jpg"
+}
 
-os.makedirs(output_folder, exist_ok=True)
+# Create folders
+for split in ["train", "test"]:
+    for cls in images:
+        os.makedirs(f"dataset/{split}/{cls}", exist_ok=True)
 
+# ✅ Zoom function
 def zoom_image(img, zoom_factor):
     w, h = img.size
     new_w = int(w / zoom_factor)
@@ -19,19 +29,42 @@ def zoom_image(img, zoom_factor):
     cropped = img.crop((left, top, right, bottom))
     return cropped.resize((w, h))
 
-for filename in os.listdir(input_folder):
-    if filename.endswith((".jpg", ".png", ".jpeg")):
-        path = os.path.join(input_folder, filename)
-        img = Image.open(path).convert("RGB")
+# Augmentation function
+def augment(img):
+    choice = random.choice(["rotate", "bright", "contrast", "blur", "zoom"])
+    
+    if choice == "rotate":
+        return img.rotate(random.uniform(-10, 10))
+    elif choice == "bright":
+        return ImageEnhance.Brightness(img).enhance(random.uniform(0.8,1.2))
+    elif choice == "contrast":
+        return ImageEnhance.Contrast(img).enhance(random.uniform(0.8,1.2))
+    elif choice == "blur":
+        return img.filter(ImageFilter.GaussianBlur(1))
+    elif choice == "zoom":
+        return zoom_image(img, random.uniform(1.1, 1.4))
+    
+    return img
 
-        name = os.path.splitext(filename)[0]
+# Generate dataset
+for cls, path in images.items():
+    original = Image.open(path).convert("RGB")
 
-        img.save(os.path.join(output_folder, f"{name}_original.jpg"))
+    for i in range(20):
+        img = original.copy()
 
-        zoom_levels = [1.1, 1.2, 1.3, 1.4]
+        # Keep first image original
+        if i != 0:
+            img = augment(img)
 
-        for i, z in enumerate(zoom_levels):
-            zoomed = zoom_image(img, z)
-            zoomed.save(os.path.join(output_folder, f"{name}_zoom{i+1}.jpg"))
+        folder = "train" if i < 16 else "test"
+        img.save(f"dataset/{folder}/{cls}/{cls.lower()}_{i}.jpg")
 
-print("Done! Images saved in augmented_images/")
+# Zip dataset
+with zipfile.ZipFile("dataset.zip", "w") as z:
+    for root, _, files in os.walk("dataset"):
+        for f in files:
+            full = os.path.join(root, f)
+            z.write(full, os.path.relpath(full, "dataset"))
+
+print("DONE: dataset.zip created with zoom augmentation")
